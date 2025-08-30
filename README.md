@@ -1,0 +1,2 @@
+# ClaimIQ
+Intelligent claims management
