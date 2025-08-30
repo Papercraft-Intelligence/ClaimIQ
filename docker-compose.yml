@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  claimiq-web-dev:
+    build: .                                  # build whatever dockerfile is in the current directory
+    ports:
+      - "8080:80"                             # HOST_PORT:CONTAINER_PORT
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development    # Set the environmental variable to Development
+    container_name: claimiq-web-dev
+
+  claimiq-web-staging:
+    build: .                                  # build whatever dockerfile is in the current directory
+    ports:
+      - "8081:80"                             # Use 8081 in case you want to run staging side by side with development
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Staging
+    container_name: claimiq-web-staging
