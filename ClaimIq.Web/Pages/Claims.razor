@@ -1,0 +1,95 @@
+@page "/claims"
+@using ClaimIq.Domain.Models
+@using ClaimIq.Web.Services
+@using MudBlazor
+@inject ClaimsService ClaimsService
+
+<PageTitle>Claims Dashboard</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">🏥 Claims Dashboard</MudText>
+
+@if (isLoading)
+{
+    <div style="text-align: center; padding: 2rem;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText Typo="Typo.body1" Class="mt-2">🔄 Loading claims from AWS Lambda...</MudText>
+        <MudText Typo="Typo.caption">Testing the bridge across the chasm... 🌉</MudText>
+    </div>
+}
+else if (error != null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <strong>❌ Connection Failed</strong><br />
+        @error
+    </MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadClaims">
+        🔄 Retry
+    </MudButton>
+}
+else if (claims == null || !claims.Any())
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">
+        <strong>📭 No Claims Found</strong><br />
+        Either no claims exist or the API isn't returning data.
+    </MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadClaims">
+        🔄 Refresh
+    </MudButton>
+}
+else
+{
+    <MudAlert Severity="Severity.Success" Class="mb-4">
+        <strong>✅ Bridge Connected!</strong><br />
+        Successfully loaded <strong>@claims.Count</strong> claims from your AWS Lambda API!
+        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="LoadClaims" Class="ml-2">
+            🔄 Refresh
+        </MudButton>
+    </MudAlert>
+
+    <!-- Simple claims list for now -->
+    <MudGrid>
+        @foreach (var claim in claims)
+        {
+            <MudItem xs="12" sm="6" lg="4">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Color="Color.Primary">@claim.ClaimNumber</MudText>
+                        <MudText Typo="Typo.body1" Class="mb-2"><strong>@claim.PolicyHolderName</strong></MudText>
+                        <MudText Typo="Typo.body2" Class="mb-2">💰 <strong>@claim.IncurredAmount.ToString("C")</strong></MudText>
+                        <MudText Typo="Typo.body2">📅 @claim.DateOfLoss.ToString("MMM dd, yyyy")</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<InsuranceClaim>? claims;
+    private bool isLoading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadClaims();
+    }
+
+    private async Task LoadClaims()
+    {
+        isLoading = true;
+        error = null;
+        
+        try
+        {
+            claims = await ClaimsService.GetClaimsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

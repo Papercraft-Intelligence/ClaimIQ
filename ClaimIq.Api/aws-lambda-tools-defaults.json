@@ -1,0 +1,12 @@
+{
+    "Information": [
+        "Lambda deployment configuration for ClaimIQ API"
+    ],
+    "function-runtime": "dotnet8",
+    "function-memory-size": 256,
+    "function-timeout": 30,
+    "function-handler": "ClaimIq.Api",
+    "function-architecture": "x86_64",
+    "configuration": "Release",
+    "msbuild-parameters": "--self-contained false"
+}

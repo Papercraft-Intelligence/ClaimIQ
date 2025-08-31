@@ -1,18 +1,68 @@
 version: '3.8'
 
 services:
-  claimiq-web-dev:
-    build: .                                  # build whatever dockerfile is in the current directory
+  claimiq-api:
+    build:
+      context: .
+      dockerfile: ./ClaimIq.Api/Dockerfile
+      args:
+        - ENVIRONMENT=${ENVIRONMENT}
     ports:
-      - "8080:80"                             # HOST_PORT:CONTAINER_PORT
+      - "${API_PORT}:${CONTAINER_PORT}"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development    # Set the environmental variable to Development
-    container_name: claimiq-web-dev
+      - ASPNETCORE_ENVIRONMENT=${ENVIRONMENT}
+      - ASPNETCORE_URLS=http://+:${CONTAINER_PORT}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - claimiq-network
+    labels:
+      - "com.claimiq.service=api"
+      - "com.claimiq.environment=${ENVIRONMENT}"
 
-  claimiq-web-staging:
-    build: .                                  # build whatever dockerfile is in the current directory
+  claimiq-web:
+    build:
+      context: .
+      dockerfile: ./ClaimIq.Web/Dockerfile
+      args:
+        - ENVIRONMENT=${ENVIRONMENT}
+        - API_BASE_URL=${API_BASE_URL}
     ports:
-      - "8081:80"                             # Use 8081 in case you want to run staging side by side with development
+      - "${WEB_PORT}:${CONTAINER_PORT}"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Staging
-    container_name: claimiq-web-staging
+      - ASPNETCORE_ENVIRONMENT=${ENVIRONMENT}
+      - ApiBaseUrl=${API_BASE_URL}
+    depends_on:
+      claimiq-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - claimiq-network
+    labels:
+      - "com.claimiq.service=web"
+      - "com.claimiq.environment=${ENVIRONMENT}"
+
+networks:
+  claimiq-network:
+    driver: bridge
+    name: claimiq-${ENVIRONMENT}
+    labels:
+      - "com.claimiq.network=true"
+
+volumes:
+  claimiq-data:
+    name: claimiq-data-${ENVIRONMENT}
+    labels:
+      - "com.claimiq.volume=data"
