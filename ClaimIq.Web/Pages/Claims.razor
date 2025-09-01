@@ -1,73 +1,90 @@
 @page "/claims"
-@using ClaimIq.Domain.Models
 @using ClaimIq.Web.Services
-@using MudBlazor
+@using ClaimIq.Domain.Models
 @inject ClaimsService ClaimsService
 
-<PageTitle>Claims Dashboard</PageTitle>
+<PageTitle>Claims Dashboard - ClaimIQ</PageTitle>
 
-<MudText Typo="Typo.h3" Class="mb-4">🏥 Claims Dashboard</MudText>
-
-@if (isLoading)
-{
-    <div style="text-align: center; padding: 2rem;">
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-        <MudText Typo="Typo.body1" Class="mt-2">🔄 Loading claims from AWS Lambda...</MudText>
-        <MudText Typo="Typo.caption">Testing the bridge across the chasm... 🌉</MudText>
-    </div>
-}
-else if (error != null)
-{
-    <MudAlert Severity="Severity.Error" Class="mb-4">
-        <strong>❌ Connection Failed</strong><br />
-        @error
-    </MudAlert>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadClaims">
-        🔄 Retry
-    </MudButton>
-}
-else if (claims == null || !claims.Any())
-{
-    <MudAlert Severity="Severity.Warning" Class="mb-4">
-        <strong>📭 No Claims Found</strong><br />
-        Either no claims exist or the API isn't returning data.
-    </MudAlert>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadClaims">
-        🔄 Refresh
-    </MudButton>
-}
-else
-{
-    <MudAlert Severity="Severity.Success" Class="mb-4">
-        <strong>✅ Bridge Connected!</strong><br />
-        Successfully loaded <strong>@claims.Count</strong> claims from your AWS Lambda API!
-        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="LoadClaims" Class="ml-2">
-            🔄 Refresh
-        </MudButton>
-    </MudAlert>
-
-    <!-- Simple claims list for now -->
-    <MudGrid>
-        @foreach (var claim in claims)
-        {
-            <MudItem xs="12" sm="6" lg="4">
-                <MudCard>
-                    <MudCardContent>
-                        <MudText Typo="Typo.h6" Color="Color.Primary">@claim.ClaimNumber</MudText>
-                        <MudText Typo="Typo.body1" Class="mb-2"><strong>@claim.PolicyHolderName</strong></MudText>
-                        <MudText Typo="Typo.body2" Class="mb-2">💰 <strong>@claim.IncurredAmount.ToString("C")</strong></MudText>
-                        <MudText Typo="Typo.body2">📅 @claim.DateOfLoss.ToString("MMM dd, yyyy")</MudText>
-                    </MudCardContent>
-                </MudCard>
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    
+    <!-- 🔥 HERO SECTION -->
+    <MudPaper Class="hero-section mb-6" Style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; padding: 3rem; color: white;">
+        <MudGrid AlignItems="Center">
+            <MudItem xs="12" md="8">
+                <MudStack>
+                    <MudText Typo="Typo.h2" Style="font-weight: 700;">
+                        <MudIcon Icon="Icons.Material.Filled.Assessment" Class="mr-3" Size="Size.Large" />
+                        Claims Dashboard
+                    </MudText>
+                    <MudText Typo="Typo.h6" Style="opacity: 0.9;">
+                        🔥 Enterprise-grade claims management that slaps different
+                    </MudText>
+                </MudStack>
             </MudItem>
-        }
-    </MudGrid>
-}
+            <MudItem xs="12" md="4" Class="text-right">
+                <!-- 🔥 FIX: Use MudBadge instead -->
+                <MudBadge Content="@claims.Count" Color="Color.Success" Overlap="true">
+                    <MudButton Variant="Variant.Text" Style="color: white; font-weight: 600;">
+                        <MudIcon Icon="Icons.Material.Filled.TrendingUp" Class="mr-2" />
+                        Active Claims
+                    </MudButton>
+                </MudBadge>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- 🔥 EXISTING CONTENT -->
+    @if (isLoading)
+    {
+        <MudStack Row AlignItems="AlignItems.Center" Class="pa-4">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+            <MudText Class="ml-3" Typo="Typo.h6">Loading claims...</MudText>
+        </MudStack>
+    }
+    else if (claims.Any())
+    {
+        <MudGrid>
+            @foreach (var claim in claims)
+            {
+                <MudItem xs="12" md="6" lg="4">
+                    <MudCard Class="mb-4" Style="border-radius: 16px; box-shadow: 0 8px 25px rgba(0,0,0,0.15); transition: all 0.3s ease;">
+                        <MudCardContent>
+                            <MudStack>
+                                <!-- 🔥 FIX: Use MudText with styling instead -->
+                                <MudText Typo="Typo.body2" 
+                                         Style="background: #667eea; color: white; padding: 4px 12px; border-radius: 12px; width: fit-content; font-weight: 600;">
+                                    @claim.ClaimNumber
+                                </MudText>
+                                
+                                <MudText Typo="Typo.h6" Style="font-weight: 600;">@claim.PolicyHolderName</MudText>
+                                <MudText Typo="Typo.body2" Style="color: #666;">@claim.IncidentType</MudText>
+                                <MudText Typo="Typo.h5" Color="Color.Primary" Style="font-weight: 700;">
+                                    @claim.IncurredAmount.ToString("C")
+                                </MudText>
+                                
+                                <!-- 🔥 FIX: Use MudText with dynamic styling -->
+                                <MudText Typo="Typo.body2" 
+                                         Style="@GetStatusStyle(claim.Status.ToString())">
+                                    @claim.Status
+                                </MudText>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Style="border-radius: 12px;">
+            No claims found. Time to celebrate! 🎉
+        </MudAlert>
+    }
+</MudContainer>
 
 @code {
-    private List<InsuranceClaim>? claims;
+    private List<InsuranceClaim> claims = new();
     private bool isLoading = true;
-    private string? error;
 
     protected override async Task OnInitializedAsync()
     {
@@ -76,20 +93,27 @@ else
 
     private async Task LoadClaims()
     {
-        isLoading = true;
-        error = null;
-        
         try
         {
             claims = await ClaimsService.GetClaimsAsync();
         }
         catch (Exception ex)
         {
-            error = ex.Message;
+            Console.WriteLine($"Error: {ex.Message}");
         }
         finally
         {
             isLoading = false;
         }
     }
+
+    // 🔥 FIX: Replace GetStatusColor with GetStatusStyle
+    private string GetStatusStyle(string status) => status.ToLower() switch
+    {
+        "open" => "background: #ff9800; color: white; padding: 4px 12px; border-radius: 12px; width: fit-content; font-weight: 600;",
+        "closed" => "background: #4caf50; color: white; padding: 4px 12px; border-radius: 12px; width: fit-content; font-weight: 600;",
+        "pending" => "background: #2196f3; color: white; padding: 4px 12px; border-radius: 12px; width: fit-content; font-weight: 600;",
+        "investigating" => "background: #9c27b0; color: white; padding: 4px 12px; border-radius: 12px; width: fit-content; font-weight: 600;",
+        _ => "background: #757575; color: white; padding: 4px 12px; border-radius: 12px; width: fit-content; font-weight: 600;"
+    };
 }

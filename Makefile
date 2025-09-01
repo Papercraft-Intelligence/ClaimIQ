@@ -1,23 +1,49 @@
-.PHONY: dev prod clean logs shell
+.PHONY: dev clean kill build deploy verify
 
+# 🔥 Development
 dev:
-	docker-compose --env-file .env.development up --build
+	@chmod +x dev.sh && ./dev.sh
 
-prod:
-	docker-compose --env-file .env.production up --build -d
-
+# 🧹 Clean
 clean:
-	docker-compose down --volumes --remove-orphans
-	docker system prune -f
+	@echo "🧹 Cleaning .NET projects..."
+	@dotnet clean
+	@rm -rf ClaimIq.Api/publish ClaimIq.Web/publish
 
-logs:
-	docker-compose logs -f
+# 🛑 Kill processes  
+kill:
+	@echo "🛑 Killing all ClaimIQ processes..."
+	@pkill -f "ClaimIq" 2>/dev/null || true
+	@pkill -f "dotnet watch" 2>/dev/null || true
+	@lsof -ti:5001,5234 | xargs kill -9 2>/dev/null || true
+	@echo "✅ All processes killed!"
 
-shell-api:
-	docker exec -it claimiq-claimiq-api-1 /bin/bash
+# 🔨 Build for AWS
+build:
+	@echo "🔨 Building for AWS deployment..."
+	@make clean
+	@dotnet restore
+	@echo "📦 Publishing API for Lambda..."
+	@cd ClaimIq.Api && dotnet publish -c Release -o publish --runtime linux-x64 --self-contained false
+	@echo "🎨 Publishing Web for S3..."
+	@cd ClaimIq.Web && dotnet publish -c Release -o publish
+	@echo "✅ Build outputs ready for CDK!"
 
-shell-web:
-	docker exec -it claimiq-claimiq-web-1 /bin/sh
+# ☁️ Deploy to AWS
+deploy:
+	@echo "🚀 Deploying ClaimIQ to AWS..."
+	@make build
+	@echo "📦 Installing CDK dependencies..."
+	@cd infrastructure && npm install
+	@echo "🔧 Building CDK..."
+	@cd infrastructure && npm run build
+	@echo "🚀 Deploying with CDK..."
+	@cd infrastructure && npx cdk deploy --require-approval never
+	@echo "✅ Deployment complete!"
 
-health:
-	curl -f http://localhost:5234/health && curl -f http://localhost:5001
+# 🔍 Verify build outputs
+verify:
+	@echo "🔍 Verifying build outputs..."
+	@test -d ClaimIq.Api/publish || (echo "❌ API publish missing" && exit 1)
+	@test -d ClaimIq.Web/publish/wwwroot || (echo "❌ Web publish missing" && exit 1)
+	@echo "✅ All build outputs verified!"

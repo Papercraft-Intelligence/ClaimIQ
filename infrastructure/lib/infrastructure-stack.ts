@@ -111,6 +111,15 @@ export class ClaimIqStack extends cdk.Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,    // enforce HTTPS
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,                      // use AWS recommended caching policy
         },
+        additionalBehaviors: {
+          '/api/*': {
+            origin: new origins.RestApiOrigin(claimsIqGateway),                                 // forward /api/* requests to the API Gateway
+            allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,                                // allow all methods for API requests
+            cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,                               // disable caching for API requests
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,            // enforce HTTPS
+            originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER   // forward all headers except Host
+          }
+        },
         defaultRootObject: 'index.html',                                              // this is crucial for single-page applications
         errorResponses: [
           {
@@ -120,7 +129,6 @@ export class ClaimIqStack extends cdk.Stack {
           }
         ]
         });
-
 
         // Under the hood, the BucketDeployment...
         // - creates a Lambda function that handles the file upload

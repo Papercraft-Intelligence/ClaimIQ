@@ -8,7 +8,7 @@ public class ClaimsService
 {
     private readonly HttpClient _httpClient;
     private readonly string _apiBaseUrl;
-    private string _claimsEndpoint => $"{_apiBaseUrl}/api/claims";
+    private string _claimsEndpoint => $"{_apiBaseUrl}/claims";
     private readonly ILogger<ClaimsService> _logger;
 
     public ClaimsService(HttpClient httpClient, IConfiguration configuration, ILogger<ClaimsService> logger)
