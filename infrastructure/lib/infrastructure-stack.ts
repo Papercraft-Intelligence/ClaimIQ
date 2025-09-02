@@ -5,6 +5,9 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as elasticache from 'aws-cdk-lib/aws-elasticache';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { BlockPublicAccess } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -13,6 +16,66 @@ export class ClaimIqStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
       super(scope, id, props);
 
+        // need a vpc now because we need a flipping redis cluster
+        const vpc = new ec2.Vpc(this, 'ClaimIqVpc', {
+          maxAzs: 2,                                              // availability zones are basically regions/cities
+          cidr: '10.0.0.0/16',                                    // this is the address range for the whole VPC    
+          subnetConfiguration: [
+            {
+              cidrMask: 24,                                       // 24 because ???      
+              name: 'public',                                     // a public subnet is one that has direct access from the internet
+              subnetType: ec2.SubnetType.PUBLIC,                  // public ingress 
+            },
+            {
+              cidrMask: 24,                                       // 24 because ???
+              name: 'private',                                    // a private subnet is one that has no direct access from the internet
+              subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,     // egress but no ingress
+            }
+          ],
+          natGateways: 1                                          // required by lambda to reach aws apis
+        });
+
+        // jwt stuff
+        const jwtSecret = new secretsmanager.Secret(this, 'ClaimIqJwtSecret', {
+          description: 'JWT signing secret for ClaimIQ API',
+          generateSecretString: {
+            secretStringTemplate: JSON.stringify({ username: 'jwt' }),
+            generateStringKey: 'secret',
+            excludeCharacters:'"@/\\\'',
+            passwordLength: 64
+          }
+        })
+
+        // security group for redis
+        const redisSecurityGroup = new ec2.SecurityGroup(this, 'RedisSecurityGroup', {          // a security group is like a firewall for aws resources
+          vpc,
+          description: 'security group for redis cluster'
+        });
+
+        const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {        // a security group is like a firewall for aws resources
+          vpc,
+          description: 'security group for lambda function'
+        });
+
+        redisSecurityGroup.addIngressRule(
+          lambdaSecurityGroup,                   // allow lambda inside the vpc to access redis
+          ec2.Port.tcp(6379),                    // on port 6379
+          'Allow Lambda access to Redis'
+        );
+
+        const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
+          description: 'Subnet group for Redis cluster',
+          subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId),
+        });
+
+        const redisCluster = new elasticache.CfnCacheCluster(this, 'RedisCluster', {
+          cacheNodeType: 'cache.t3.micro', // because i'm cheap
+          engine: 'redis', 
+          numCacheNodes: 1,                // single node for demo purposes
+          cacheSubnetGroupName: redisSubnetGroup.ref,
+          vpcSecurityGroupIds: [redisSecurityGroup.securityGroupId]
+        });
+        
 
       //////////// Website Bucket ////////////
       const websiteBucket = new s3.Bucket(this, 'ClaimIqWebsiteBucket', {
@@ -28,16 +91,36 @@ export class ClaimIqStack extends cdk.Stack {
       /////////// Lambda Function ////////////
       const claimsLambda = new lambda.Function(this, 'ClaimIqFunction', {
         runtime: lambda.Runtime.DOTNET_8,                                               // the runtime environment for the Lambda function
-        memorySize: 256,                                                                // the amount of memory allocated to the function
+        memorySize: 1024,                                                                // the amount of memory allocated to the function
         timeout: cdk.Duration.seconds(30),                                              // maximum execution time for the function
         architecture: lambda.Architecture.X86_64,                                       // architecture type
         code: lambda.Code.fromAsset('../ClaimIq.Api/publish'),                                  // location of the Lambda function code
-        handler: 'ClaimIq.Api'                                                          // the function handler
+        handler: 'ClaimIq.Api',                                                          // the function handler
+        vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS                              // lambda needs to be in a private subnet with egress to reach aws services
+        },
+        securityGroups: [lambdaSecurityGroup],
+        environment: {
+          // jwt stuff
+          JWT_SECRET: jwtSecret.secretValueFromJson('secret').unsafeUnwrap(),
+          JWT_ISSUER: 'ClaimIQ-API',
+          JWT_AUDIENCE: 'ClaimIQ-Users',
+
+          // redis stuff
+          REDIS_ENDPOINT: redisCluster.attrRedisEndpointAddress,
+          REDIS_PORT: '6379',                                                        // 6379 is apparently the default port for redis   
+        
+          // environmental
+          ASPNETCORE_ENVIRONMENT: 'Production',
+          DEPLOYMENT_REGION: this.region
+        }
       });
-                  // example environment variable
+
+      jwtSecret.grantRead(claimsLambda);                                                // allow lambda to read the jwt secret
 
       /////////// API Gateway ///////////////
-      const claimsIqGateway = new apigateway.RestApi(this, 'ClaimIqApiGateway', {       // Generic gateway that can front for multiple services
+      const claimsIqGateway = new apigateway.RestApi(this, 'ClaimIqApiGateway', {       // Generic gateway that can front for multiple services (claims, feature flags, whatever)
         restApiName: 'ClaimIQ API Gateway',                                             // Generically named to encourage reuse
         description: 'Main API Gateway for ClaimIQ Services',                           // Friendly description
       });
@@ -94,11 +177,30 @@ export class ClaimIqStack extends cdk.Stack {
         }]
       });
 
-      // CLAIMS Resources
-      const claimsIntegration = new apigateway.LambdaIntegration(claimsLambda);         // Integration for claims Lambda
+
+      // Integration (add new apis here)
+      const apiIntegration = new apigateway.LambdaIntegration(claimsLambda);         // Integration for api Lambda
+
+
+      // Claims Resources
       const claimsResource = apiRootResource.addResource('claims');                     // handles /api/claims
-      claimsResource.addMethod('ANY', claimsIntegration);                               // Handles: /api/claims and /api/claims/{anything}
-      claimsResource.addResource('{proxy+}').addMethod('ANY', claimsIntegration);       // Handles: /api/claims/CLM-123 and /api/claims/anything/else 
+      claimsResource.addMethod('ANY', apiIntegration);                               // Handles: /api/claims and /api/claims/{anything}
+      claimsResource.addResource('{proxy+}').addMethod('ANY', apiIntegration);       // Handles: /api/claims/CLM-123 and /api/claims/anything/else 
+
+      // Feature flag resources
+      const featureflagResource = apiRootResource.addResource('FeatureFlag');
+      featureflagResource.addMethod('ANY', apiIntegration);                               // Handles: /api/FeatureFlag and /api/FeatureFlag/{anything}
+      featureflagResource.addResource('{proxy+}').addMethod('ANY', apiIntegration);       // Handles: /api/FeatureFlag/CLM-123 and /api/FeatureFlag/anything/else
+
+      // Auth Resources
+      const authResource = apiRootResource.addResource('auth');
+      authResource.addMethod('ANY', apiIntegration);
+      authResource.addResource('{proxy+}').addMethod('ANY', apiIntegration);
+      
+      // Swagger UI Resources
+      const swaggerResource = apiRootResource.addResource('swagger');
+      swaggerResource.addMethod('ANY', apiIntegration);
+      swaggerResource.addResource('{proxy+}').addMethod('ANY', apiIntegration);
 
       
 
@@ -143,6 +245,11 @@ export class ClaimIqStack extends cdk.Stack {
           distribution,                                                               // CloudFront distribution to invalidate
           distributionPaths: ['/*'],                                                  // Paths to invalidate
         });
+
+
+
+
+
 
 
         //////////// CDK Outputs ////////////

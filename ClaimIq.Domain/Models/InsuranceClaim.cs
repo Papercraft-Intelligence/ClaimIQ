@@ -2,6 +2,7 @@ namespace ClaimIq.Domain.Models;
 
 public class InsuranceClaim
 {
+    public string Description { get; set; } = string.Empty;
     public string ClaimId { get; set; } = string.Empty;
     public string ClaimNumber { get; set; } = string.Empty;
     public string PolicyHolderName { get; set; } = string.Empty;
@@ -25,6 +26,7 @@ public class InsuranceClaim
     public bool IsReported { get; set; } = true;
     public string ReportingSource { get; set; } = string.Empty;
     public List<string> Tags { get; set; } = new();
+    public ClaimType ClaimType { get; set; }
 }
 
 public enum ClaimType

@@ -1,16 +1,14 @@
 .PHONY: dev clean kill build deploy verify
 
-# 🔥 Development
 dev:
 	@chmod +x dev.sh && ./dev.sh
 
-# 🧹 Clean
 clean:
 	@echo "🧹 Cleaning .NET projects..."
 	@dotnet clean
 	@rm -rf ClaimIq.Api/publish ClaimIq.Web/publish
 
-# 🛑 Kill processes  
+
 kill:
 	@echo "🛑 Killing all ClaimIQ processes..."
 	@pkill -f "ClaimIq" 2>/dev/null || true
@@ -18,7 +16,6 @@ kill:
 	@lsof -ti:5001,5234 | xargs kill -9 2>/dev/null || true
 	@echo "✅ All processes killed!"
 
-# 🔨 Build for AWS
 build:
 	@echo "🔨 Building for AWS deployment..."
 	@make clean
@@ -29,7 +26,6 @@ build:
 	@cd ClaimIq.Web && dotnet publish -c Release -o publish
 	@echo "✅ Build outputs ready for CDK!"
 
-# ☁️ Deploy to AWS
 deploy:
 	@echo "🚀 Deploying ClaimIQ to AWS..."
 	@make build
@@ -41,7 +37,6 @@ deploy:
 	@cd infrastructure && npx cdk deploy --require-approval never
 	@echo "✅ Deployment complete!"
 
-# 🔍 Verify build outputs
 verify:
 	@echo "🔍 Verifying build outputs..."
 	@test -d ClaimIq.Api/publish || (echo "❌ API publish missing" && exit 1)

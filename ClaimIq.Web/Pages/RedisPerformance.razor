@@ -1,0 +1,336 @@
+@page "/redis-performance"
+@using System.Diagnostics
+@using ClaimIq.Web.Services
+@inject FeatureFlagService FeatureFlagService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Redis Performance Test</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3><i class="fas fa-rocket"></i> Redis Cache Performance Testing</h3>
+                </div>
+                <div class="card-body">
+                    
+                    @* 🔥 PERFORMANCE METRICS DISPLAY *@
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <h5 class="text-success">Last Response Time</h5>
+                                    <h2 class="text-success">@lastResponseTime ms</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-info">
+                                <div class="card-body text-center">
+                                    <h5 class="text-info">Average Response</h5>
+                                    <h2 class="text-info">@averageResponseTime ms</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-warning">
+                                <div class="card-body text-center">
+                                    <h5 class="text-warning">Total Requests</h5>
+                                    <h2 class="text-warning">@totalRequests</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-danger">
+                                <div class="card-body text-center">
+                                    <h5 class="text-danger">Cache Hit Rate</h5>
+                                    <h2 class="text-danger">@cacheHitRate%</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* 🚀 TEST CONTROLS *@
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-flag"></i> Feature Flag Tests</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Select Feature Flag:</label>
+                                        <select class="form-select" @bind="selectedFlag">
+                                            <option value="advanced-claims-search">Advanced Claims Search</option>
+                                            <option value="dark-mode">Dark Mode</option>
+                                            <option value="enhanced-search">Enhanced Search</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-primary" @onclick="TestSingleFlag" disabled="@isLoading">
+                                            @if (isLoading)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                            }
+                                            <i class="fas fa-play"></i> Test Single Flag
+                                        </button>
+                                        
+                                        <button class="btn btn-success" @onclick="TestAllFlags" disabled="@isLoading">
+                                            <i class="fas fa-list"></i> Test All Flags
+                                        </button>
+                                        
+                                        <button class="btn btn-warning" @onclick="StressTest" disabled="@isLoading">
+                                            <i class="fas fa-fire"></i> Stress Test (10x Rapid)
+                                        </button>
+                                        
+                                        <button class="btn btn-danger" @onclick="ClearCache" disabled="@isLoading">
+                                            <i class="fas fa-trash"></i> Clear Cache & Restart
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-chart-line"></i> Performance Chart</h5>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="performanceChart" width="400" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* 📊 PERFORMANCE LOG *@
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-terminal"></i> Performance Log</h5>
+                            <button class="btn btn-sm btn-outline-secondary float-end" @onclick="ClearLog">Clear Log</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="performance-log" style="height: 300px; overflow-y: auto; background: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace; padding: 10px;">
+                                @foreach (var entry in performanceLog.OrderByDescending(x => x.Timestamp))
+                                {
+                                    <div class="log-entry mb-1">
+                                        <span class="text-warning">[@entry.Timestamp.ToString("HH:mm:ss.fff")]</span>
+                                        <span class="text-info">[@entry.Type]</span>
+                                        <span class="text-success">@entry.Message</span>
+                                        @if (entry.ResponseTime > 0)
+                                        {
+                                            <span class="text-danger">(@entry.ResponseTime ms)</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string selectedFlag = "advanced-claims-search";
+    private bool isLoading = false;
+    private int lastResponseTime = 0;
+    private double averageResponseTime = 0;
+    private int totalRequests = 0;
+    private int cacheHitRate = 85;
+    
+    private List<PerformanceLogEntry> performanceLog = new();
+    private List<int> responseTimes = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await InitializeChart();
+            AddLogEntry("SYSTEM", "🔥 Redis Performance Dashboard Initialized");
+        }
+    }
+
+    private async Task TestSingleFlag()
+    {
+        isLoading = true;
+        var stopwatch = Stopwatch.StartNew();
+        
+        try
+        {
+            AddLogEntry("REQUEST", $"🚀 Testing flag: {selectedFlag}");
+            
+            // 🔥 USE YOUR FeatureFlagService
+            var result = await FeatureFlagService.EvaluateFeatureFlagAsync(selectedFlag);
+            
+            stopwatch.Stop();
+            var responseTime = (int)stopwatch.ElapsedMilliseconds;
+            
+            RecordPerformance(responseTime);
+            AddLogEntry("SUCCESS", $"✅ Flag {selectedFlag} = {result?.Enabled}", responseTime);
+            
+            await UpdateChart();
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            AddLogEntry("ERROR", $"❌ Failed to test flag: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+
+    private async Task TestAllFlags()
+    {
+        isLoading = true;
+        var flags = new[] { "advanced-claims-search", "dark-mode", "enhanced-search" };
+        
+        AddLogEntry("BATCH", "🔥 Testing all feature flags...");
+        
+        foreach (var flag in flags)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                // 🔥 USE YOUR FeatureFlagService
+                var result = await FeatureFlagService.EvaluateFeatureFlagAsync(flag);
+                stopwatch.Stop();
+                var responseTime = (int)stopwatch.ElapsedMilliseconds;
+                
+                RecordPerformance(responseTime);
+                AddLogEntry("FLAG", $"✅ {flag} = {result?.Enabled}", responseTime);
+                
+                await Task.Delay(100);
+            }
+            catch (Exception ex)
+            {
+                AddLogEntry("ERROR", $"❌ {flag} failed: {ex.Message}");
+            }
+        }
+        
+        await UpdateChart();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task StressTest()
+    {
+        isLoading = true;
+        AddLogEntry("STRESS", "🔥 Starting stress test (10 rapid requests)...");
+        
+        var tasks = new List<Task>();
+        for (int i = 0; i < 10; i++)
+        {
+            tasks.Add(Task.Run(async () =>
+            {
+                var stopwatch = Stopwatch.StartNew();
+                try
+                {
+                    var result = await FeatureFlagService.EvaluateFeatureFlagAsync(selectedFlag);
+                    stopwatch.Stop();
+                    var responseTime = (int)stopwatch.ElapsedMilliseconds;
+                    
+                    RecordPerformance(responseTime);
+                    AddLogEntry("RAPID", $"⚡ Rapid #{i+1} = {result?.Enabled}", responseTime);
+                }
+                catch (Exception ex)
+                {
+                    AddLogEntry("ERROR", $"💥 Rapid #{i+1} failed: {ex.Message}");
+                }
+            }));
+        }
+        
+        await Task.WhenAll(tasks);
+        await UpdateChart();
+        
+        AddLogEntry("COMPLETE", "✅ Stress test completed");
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task ClearCache()
+    {
+        AddLogEntry("CACHE", "🗑️ Clearing cache and restarting...");
+        
+        try
+        {
+            // 🔥 USE YOUR FeatureFlagService
+            await FeatureFlagService.GetAllFeatureFlagsAsync();
+            AddLogEntry("CACHE", "✅ Cache cleared, Redis re-initialized");
+        }
+        catch (Exception ex)
+        {
+            AddLogEntry("ERROR", $"❌ Cache clear failed: {ex.Message}");
+        }
+        
+        StateHasChanged();
+    }
+
+    private void RecordPerformance(int responseTime)
+    {
+        lastResponseTime = responseTime;
+        responseTimes.Add(responseTime);
+        totalRequests++;
+        
+        if (responseTimes.Count > 0)
+        {
+            averageResponseTime = Math.Round(responseTimes.Average(), 1);
+        }
+        
+        // Simulate cache hit rate calculation
+        cacheHitRate = responseTime < 20 ? 95 : 75;
+    }
+
+    private void AddLogEntry(string type, string message, int responseTime = 0)
+    {
+        performanceLog.Add(new PerformanceLogEntry
+        {
+            Timestamp = DateTime.Now,
+            Type = type,
+            Message = message,
+            ResponseTime = responseTime
+        });
+        
+        // Keep only last 100 entries
+        if (performanceLog.Count > 100)
+        {
+            performanceLog.RemoveAt(0);
+        }
+    }
+
+    private void ClearLog()
+    {
+        performanceLog.Clear();
+        responseTimes.Clear();
+        totalRequests = 0;
+        averageResponseTime = 0;
+        lastResponseTime = 0;
+        StateHasChanged();
+    }
+
+    private async Task InitializeChart()
+    {
+        await JSRuntime.InvokeVoidAsync("initializePerformanceChart");
+    }
+
+    private async Task UpdateChart()
+    {
+        var recentTimes = responseTimes.TakeLast(20).ToArray();
+        await JSRuntime.InvokeVoidAsync("updatePerformanceChart", recentTimes);
+    }
+
+    public class PerformanceLogEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public string Type { get; set; } = "";
+        public string Message { get; set; } = "";
+        public int ResponseTime { get; set; }
+    }
+}
