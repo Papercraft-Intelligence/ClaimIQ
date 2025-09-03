@@ -33,6 +33,9 @@
 Redis is crazy fast but the lambda overhead (cold start) + vpc + tcp is just orders of magnitude slower.
 
 ## Possible optimizations
+  - don't do lambda
+    - cold start is probably just too slow
+  - do Lambda@Edge
   - Cache at cloudfront edge???
     - could be insanely fast??
     - not sure it's even possible??
@@ -76,3 +79,16 @@ Picture right now
 7. Connection Teardown:        10-20ms
 TOTAL: 340-490ms for first request
 
+### I am starting to think it's..
+
+PICK TWO:
+- Sub 10ms performance
+- Real-time dynamic updates
+- Serverless architecture
+
+The networking overhead of serverless/lambda won't support it.
+
+BUT -- let's confirm that. Highest ROI seems like it might be just seeing how much things can improve with provisioned concurrency, since it keeps the overall solution complexity low.
+
+# Next Iteration
+ Provisioned Concurrency.
