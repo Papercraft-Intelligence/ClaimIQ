@@ -101,6 +101,7 @@ export class ClaimIqStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS                              // lambda needs to be in a private subnet with egress to reach aws services
         },
         securityGroups: [lambdaSecurityGroup],
+        //reservedConcurrentExecutions: 5,      // Resource handler returned message: "Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [10]. 
         environment: {
           // jwt stuff
           JWT_SECRET: jwtSecret.secretValueFromJson('secret').unsafeUnwrap(),
@@ -116,6 +117,18 @@ export class ClaimIqStack extends cdk.Stack {
           DEPLOYMENT_REGION: this.region
         }
       });
+
+      const lambdaVersion = new lambda.Version(this, 'ClaimIqLambdaVersion', { // need this to create a concurrently provisioned alias
+        lambda: claimsLambda,
+        description: 'provisioned concurrency version'
+      });
+
+      const concurrentlyProvisionedClaimsApiAlias = new lambda.Alias(this, 'ClaimIqFunctionAlias', { // this is the actual alias that points to the version with provisioned concurrency
+        aliasName: 'Live',
+        version: lambdaVersion,
+        //provisionedConcurrentExecutions: 1
+      })
+
 
       jwtSecret.grantRead(claimsLambda);                                                // allow lambda to read the jwt secret
 
@@ -179,7 +192,7 @@ export class ClaimIqStack extends cdk.Stack {
 
 
       // Integration (add new apis here)
-      const apiIntegration = new apigateway.LambdaIntegration(claimsLambda);         // Integration for api Lambda
+      const apiIntegration = new apigateway.LambdaIntegration(concurrentlyProvisionedClaimsApiAlias);         // Integration for api Lambda
 
 
       // Claims Resources
