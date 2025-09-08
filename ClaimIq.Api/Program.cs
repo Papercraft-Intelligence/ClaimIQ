@@ -16,27 +16,27 @@ builder.Services.AddHealthChecks();
 var jwtKey = builder.Configuration["JWT_SECRET"] ?? "your-super-secret-key-for-demo-purposes-only-change-in-production";
 var key = Encoding.ASCII.GetBytes(jwtKey);
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.RequireHttpsMetadata = false; // For local development
-    options.SaveToken = true;
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = false,  // For demo
-        ValidateAudience = false, // For demo
-        ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero
-    };
-});
+// builder.Services.AddAuthentication(options =>
+// {
+//     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+//     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+// })
+// .AddJwtBearer(options =>
+// {
+//     options.RequireHttpsMetadata = false; // For local development
+//     options.SaveToken = true;
+//     options.TokenValidationParameters = new TokenValidationParameters
+//     {
+//         ValidateIssuerSigningKey = true,
+//         IssuerSigningKey = new SymmetricSecurityKey(key),
+//         ValidateIssuer = false,  // For demo
+//         ValidateAudience = false, // For demo
+//         ValidateLifetime = true,
+//         ClockSkew = TimeSpan.Zero
+//     };
+// });
 
-builder.Services.AddAuthorization();
+// builder.Services.AddAuthorization();
 
 // Swagger up
 builder.Services.AddEndpointsApiExplorer();
@@ -129,8 +129,8 @@ app.MapHealthChecks("/health");
 app.UseCors("BlazorPolicy");
 
 // 🔥 JWT MIDDLEWARE
-app.UseAuthentication();
-app.UseAuthorization();
+// app.UseAuthentication();
+// app.UseAuthorization();
 
 app.MapControllers();
 

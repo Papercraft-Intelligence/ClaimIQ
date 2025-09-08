@@ -9,6 +9,7 @@ public interface IClaimsDataService
     IEnumerable<InsuranceClaim> GetClaims();
     IEnumerable<InsuranceClaim> GetClaimsByStatus(ClaimStatus status);
     object GetClaimsSummary();
+    List<InsuranceClaim> GetSampleClaims();
 }
 
 public class ClaimsDataService : IClaimsDataService
@@ -52,7 +53,7 @@ public class ClaimsDataService : IClaimsDataService
     }
 
     // 🔥 ENHANCED: Multi-tenant sample data
-    private static List<InsuranceClaim> GetSampleClaims() => new()
+    public List<InsuranceClaim> GetSampleClaims() => new()
     {
         new InsuranceClaim
         {

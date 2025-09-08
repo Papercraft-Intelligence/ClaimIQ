@@ -6,7 +6,7 @@ namespace ClaimIq.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]  // 🔥 REQUIRE JWT FOR FEATURE FLAGS TOO
+//[Authorize]  // 🔥 REQUIRE JWT FOR FEATURE FLAGS TOO
 public class FeatureFlagController : ControllerBase
 {
     private readonly IFeatureFlagService _featureFlagService;
@@ -23,14 +23,14 @@ public class FeatureFlagController : ControllerBase
     {
         // 🔥 GET TENANT FROM JWT TOKEN
         var tenantId = User.FindFirst("tenant_id")?.Value;
-        
+
         if (string.IsNullOrEmpty(tenantId))
         {
             return Forbid("No tenant access");
         }
 
         _logger.LogInformation("Getting feature flags for tenant {TenantId}", tenantId);
-        
+
         try
         {
             var flags = await _featureFlagService.ListFlagsAsync(tenantId);
@@ -49,19 +49,19 @@ public class FeatureFlagController : ControllerBase
         // 🔥 GET TENANT FROM JWT TOKEN
         var tenantId = User.FindFirst("tenant_id")?.Value;
         var userName = User.FindFirst("name")?.Value;
-        
+
         if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(flagKey))
         {
             return BadRequest(new { message = "TenantId and flagKey are required" });
         }
 
         _logger.LogInformation("Evaluating flag {FlagKey} for user {UserName} in tenant {TenantId}", flagKey, userName, tenantId);
-        
+
         try
         {
             var result = await _featureFlagService.EvaluateFlagAsync(tenantId, flagKey);
-            return Ok(new 
-            { 
+            return Ok(new
+            {
                 flagKey,
                 tenantId,
                 userName,
@@ -82,7 +82,7 @@ public class FeatureFlagController : ControllerBase
     {
         var tenantId = User.FindFirst("tenant_id")?.Value;
         var userName = User.FindFirst("name")?.Value;
-        
+
         if (string.IsNullOrEmpty(tenantId))
         {
             return Forbid("No tenant access");
@@ -106,4 +106,14 @@ public class FeatureFlagController : ControllerBase
             return StatusCode(500, new { message = "Internal server error" });
         }
     }
+
+    // Or create a demo endpoint without auth:
+    [HttpGet("demo")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetDemoFlags()
+    {
+        var flags = await _featureFlagService.ListFlagsAsync("demo-tenant");
+        return Ok(flags);
+    }
+
 }
