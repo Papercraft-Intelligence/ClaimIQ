@@ -1,0 +1,73 @@
+// Add to ClaimIq.Web/Pages/Login.razor
+@page "/login"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject IConfiguration Configuration
+
+<h3>ClaimIQ Login</h3>
+
+<div class="card" style="max-width: 400px; margin: 50px auto;">
+    <div class="card-body">
+        <EditForm Model="loginRequest" OnValidSubmit="HandleLogin">
+            <div class="mb-3">
+                <label>Username:</label>
+                <InputText @bind-Value="loginRequest.Username" class="form-control" placeholder="demo" />
+            </div>
+            <div class="mb-3">
+                <label>Password:</label>
+                <InputText @bind-Value="loginRequest.Password" class="form-control" placeholder="demo" type="password" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Login</button>
+        </EditForm>
+        
+        <div class="mt-3 text-muted small">
+            <strong>Demo Accounts:</strong><br/>
+            • demo / demo<br/>
+            • abc-admin / password123<br/>
+            • xyz-admin / password123
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new();
+    
+    private async Task HandleLogin()
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync(Configuration["ApiBaseUrl"]
+            +"/Auth/login", loginRequest);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                
+                // Store token in localStorage
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", loginResponse.Token);
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "tenantId", loginResponse.TenantId);
+                
+                Navigation.NavigateTo("/claims");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    public class LoginRequest
+    {
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+    
+    public class LoginResponse
+    {
+        public string Token { get; set; } = "";
+        public string TenantId { get; set; } = "";
+        public string UserName { get; set; } = "";
+        public DateTime ExpiresAt { get; set; }
+    }
+}
